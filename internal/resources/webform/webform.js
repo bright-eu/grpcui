@@ -396,6 +396,23 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
         }
     }
 
+    // mapKeyFromJSON converts a JSON object key to the value type the map key's
+    // form input expects. 64-bit integer keys stay strings, like 64-bit values.
+    function mapKeyFromJSON(keyType, k) {
+        switch (keyType) {
+            case "int32":
+            case "uint32":
+            case "sint32":
+            case "fixed32":
+            case "sfixed32":
+                return /^-?\d+$/.test(k) ? Number(k) : k;
+            case "bool":
+                return k === "true" ? true : (k === "false" ? false : k);
+            default:
+                return k;
+        }
+    }
+
     // Adds a map value to the form.
     //
     // Maps are rendered as arrays of key+value pairs. This is also how they are
@@ -426,11 +443,15 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
         var arrayVal = [];
         for (k in value) {
             if (value.hasOwnProperty(k)) {
+                // JSON object keys are always strings, but the key input
+                // validates against the key's proto type, so convert keys
+                // whose inputs expect a number or boolean.
+                var key = mapKeyFromJSON(mapEntryFields[0].type, k);
                 var entry = {};
-                entry[mapEntryFields[0].name] = k;
+                entry[mapEntryFields[0].name] = key;
                 entry[mapEntryFields[1].name] = value[k];
                 arrayVal.push(entry);
-                input.childKeys.push(k);
+                input.childKeys.push(key);
             }
         }
 
