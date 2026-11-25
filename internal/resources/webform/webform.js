@@ -464,10 +464,16 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
                     }
                 }
 
-                var entryVal = this.asArray.children[index]['value'].value;
-                this.parent.onAdd(this, [newKey], entryVal);
-                if (!isUnset(key)) {
-                    this.parent.onDelete(this, [key]);
+                // Leaving a key field re-commits its value even when it did
+                // not change. Adding the entry under the new key and then
+                // deleting the old one would then delete the entry, so only
+                // move the entry when the key is new or actually differs.
+                if (isUnset(key) || String(key) !== String(newKey)) {
+                    var entryVal = this.asArray.children[index]['value'].value;
+                    this.parent.onAdd(this, [newKey], entryVal);
+                    if (!isUnset(key)) {
+                        this.parent.onDelete(this, [key]);
+                    }
                 }
                 this.childKeys[index] = newKey;
                 return;
