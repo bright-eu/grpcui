@@ -402,23 +402,6 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
         }
     }
 
-    // mapKeyFromJSON converts a JSON object key to the value type the map key's
-    // form input expects. 64-bit integer keys stay strings, like 64-bit values.
-    function mapKeyFromJSON(keyType, k) {
-        switch (keyType) {
-            case "int32":
-            case "uint32":
-            case "sint32":
-            case "fixed32":
-            case "sfixed32":
-                return /^-?\d+$/.test(k) ? Number(k) : k;
-            case "bool":
-                return k === "true" ? true : (k === "false" ? false : k);
-            default:
-                return k;
-        }
-    }
-
     // Adds a map value to the form.
     //
     // Maps are rendered as arrays of key+value pairs. This is also how they are
@@ -449,15 +432,11 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
         var arrayVal = [];
         for (k in value) {
             if (value.hasOwnProperty(k)) {
-                // JSON object keys are always strings, but the key input
-                // validates against the key's proto type, so convert keys
-                // whose inputs expect a number or boolean.
-                var key = mapKeyFromJSON(mapEntryFields[0].type, k);
                 var entry = {};
-                entry[mapEntryFields[0].name] = key;
+                entry[mapEntryFields[0].name] = k;
                 entry[mapEntryFields[1].name] = value[k];
                 arrayVal.push(entry);
-                input.childKeys.push(key);
+                input.childKeys.push(k);
             }
         }
 
@@ -476,8 +455,11 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
                 // this change is fixing a duplicate key issue by changing
                 // the other key, instead of the key that generated original
                 // error...)
+                // Keys read from JSON are strings, while keys entered in the
+                // form may be numbers, so compare them as strings (as they
+                // are in the request object).
                 for (var i = 0; i < this.childKeys.length; i++) {
-                    if (i !== index && this.childKeys[i] === newKey) {
+                    if (i !== index && !isUnset(this.childKeys[i]) && String(this.childKeys[i]) === String(newKey)) {
                         throw new Error('key "' + newKey + '" is a duplicate');
                     }
                 }
@@ -1157,6 +1139,9 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
             value = fld.defaultVal;
             disabled = true;
         } else {
+            if (isNumberString(value)) {
+                value = + value;
+            }
             if (typeof value !== 'number') {
                 throw typeError(fld.type, value, "number");
             }
@@ -1206,6 +1191,13 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
         // way outside the range of 32 or even 64 bit int). We do a range
         // check elsewhere (e.g. to verify if it's in range of 32-bits).
         return (num % 1) === 0;
+    }
+
+    // Reports whether the given value is a string holding a JSON number. The
+    // proto JSON format accepts numbers in quotes (and map keys are always
+    // strings in JSON), so number inputs accept these as well as numbers.
+    function isNumberString(value) {
+        return typeof value === 'string' && /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/.test(value);
     }
 
     function addStringIntToForm(container, parent, value, fld, min, max) {
@@ -1320,6 +1312,8 @@ window.initGRPCForm = function(services, svcDescs, mtdDescs, invokeURI, metadata
         if (isUnset(value)) {
             value = fld.defaultVal;
             disabled = true;
+        } else if (isNumberString(value)) {
+            value = + value;
         } else if (typeof value !== 'number') {
             switch (value) {
                 case "Infinity":
